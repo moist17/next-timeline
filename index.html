@@ -1,454 +1,800 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>專案執行週時程表</title>
-    
-    <!-- 引入 React 與 ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- 引入 Babel 用於解析 JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- 引入 Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Project Timeline Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Firebase SDK Setup -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    <style>
-        body { font-family: "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        /* 自定義捲軸樣式 */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    </style>
+    // Expose Firebase functions to the global window object for the Babel script to use
+    window.Firebase = {
+      initializeApp,
+      getDatabase,
+      ref,
+      set,
+      onValue
+    };
+  </script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    /* Custom scrollbar for better aesthetics */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-in-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
 </head>
-<body class="bg-gray-50 text-slate-800">
+<body class="bg-gray-50">
+  <div id="root"></div>
 
-    <div id="root"></div>
+  <script type="text/babel" data-presets="typescript,react">
+    const { useState, useEffect, useRef } = React;
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+    // --- Icons ---
+    const CalendarIcon = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+    );
+    const Filter = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+    );
+    const Plus = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+    );
+    const X = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    );
+    const Edit2 = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+    );
+    const Trash2 = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+    );
+    const Save = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+    );
+    const RotateCcw = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+    );
+    const AlertCircle = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+    );
+    const GripHorizontal = ({ size = 24, className = "" }) => (
+       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="9" r="1"></circle><circle cx="19" cy="9" r="1"></circle><circle cx="5" cy="9" r="1"></circle><circle cx="12" cy="15" r="1"></circle><circle cx="19" cy="15" r="1"></circle><circle cx="5" cy="15" r="1"></circle></svg>
+    );
+    const Settings = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    );
+    const Cloud = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>
+    );
+    const CloudOff = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+    );
+    const Loader2 = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`animate-spin ${className}`}><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+    );
 
-        // --- 圖示組件 (內建 SVG 以確保無需外部依賴) ---
-        const Icon = ({ path, size = 20, className = "" }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                {path}
-            </svg>
-        );
+    // --- Main Component ---
+    function ProjectTimeline() {
+      // 專案總週數：12月~4月 約 5個月 x 4週 = 20週
+      const totalWeeks = 20;
+      const weeks = Array.from({ length: totalWeeks }, (_, i) => i + 1);
 
-        const Icons = {
-            Calendar: (props) => <Icon {...props} path={<><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></>} />,
-            User: (props) => <Icon {...props} path={<><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></>} />,
-            Filter: (props) => <Icon {...props} path={<><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></>} />,
-            Plus: (props) => <Icon {...props} path={<><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></>} />,
-            X: (props) => <Icon {...props} path={<><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></>} />,
-            Edit2: (props) => <Icon {...props} path={<><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></>} />,
-            Trash2: (props) => <Icon {...props} path={<><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></>} />,
-            Save: (props) => <Icon {...props} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></>} />,
-            RotateCcw: (props) => <Icon {...props} path={<><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></>} />,
-            AlertCircle: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></>} />
-        };
+      // 月份標示
+      const months = [
+        { name: '12 月 (定義與基礎)', start: 1, span: 4 },
+        { name: '1 月 (視覺與 Mock)', start: 5, span: 4 },
+        { name: '2 月 (前端提早開發)', start: 9, span: 4 },
+        { name: '3 月 (串接與整合)', start: 13, span: 4 },
+        { name: '4 月 (驗收與除錯)', start: 17, span: 4 },
+      ];
 
-        // --- 主應用程式 ---
-        const App = () => {
-            const totalWeeks = 20;
-            const weeks = Array.from({ length: totalWeeks }, (_, i) => i + 1);
+      // 部門顏色
+      const departmentColors = {
+        "PM": "bg-blue-100 text-blue-800 border-blue-200",
+        "設計": "bg-purple-100 text-purple-800 border-purple-200",
+        "前端": "bg-emerald-100 text-emerald-800 border-emerald-200",
+        "後端": "bg-cyan-100 text-cyan-800 border-cyan-200",
+        "QA": "bg-orange-100 text-orange-800 border-orange-200",
+        "行銷": "bg-pink-100 text-pink-800 border-pink-200",
+      };
 
-            const months = [
-                { name: '12 月 (定義與基礎)', start: 1, span: 4 },
-                { name: '1 月 (視覺與 Mock)', start: 5, span: 4 },
-                { name: '2 月 (前端提早開發)', start: 9, span: 4 },
-                { name: '3 月 (串接與整合)', start: 13, span: 4 },
-                { name: '4 月 (驗收與除錯)', start: 17, span: 4 },
-            ];
+      const statusOptions = ["未開始", "進行中", "已完成", "延遲"];
 
-            const departmentColors = {
-                "PM": "bg-blue-100 text-blue-800 border-blue-200",
-                "設計": "bg-purple-100 text-purple-800 border-purple-200",
-                "前端": "bg-emerald-100 text-emerald-800 border-emerald-200",
-                "後端": "bg-cyan-100 text-cyan-800 border-cyan-200",
-                "QA": "bg-orange-100 text-orange-800 border-orange-200",
-                "行銷": "bg-pink-100 text-pink-800 border-pink-200",
-            };
+      // 預設資料
+      const initialTasks = [
+        { id: 1, name: "制定 API 介面規格書 (購物車/Menu)", owner: "後端", start: 1, duration: 2, status: "進行中", progress: 20 },
+        { id: 2, name: "購物車刷卡結帳 API 開發", owner: "後端", start: 1, duration: 4, status: "進行中", progress: 10 },
+        { id: 3, name: "現有商品頁功能收尾", owner: "前端", start: 1, duration: 3, status: "進行中", progress: 30 },
+        { id: 4, name: "首頁、Megamenu UI/UX 設計", owner: "設計", start: 5, duration: 4, status: "未開始", progress: 0 },
+        { id: 5, name: "依規格建立 Mock Server", owner: "前端", start: 5, duration: 2, status: "未開始", progress: 0 },
+        { id: 6, name: "購物車實體與訂閱功能開發", owner: "後端", start: 5, duration: 4, status: "未開始", progress: 0 },
+        { id: 7, name: "Demo: 瀏覽->購物車->結帳 (假資料)", owner: "前端", start: 7, duration: 2, status: "未開始", progress: 0 },
+        { id: 8, name: "首頁 & Megamenu 開發 (接 Mock)", owner: "前端", start: 9, duration: 4, status: "未開始", progress: 0 },
+        { id: 9, name: "購物車複雜邏輯開發", owner: "後端", start: 9, duration: 4, status: "未開始", progress: 0 },
+        { id: 10, name: "測試「金流通道」連線", owner: "PM", start: 10, duration: 2, status: "未開始", progress: 0 },
+        { id: 11, name: "購物車邏輯完成 & 搜尋 API", owner: "後端", start: 13, duration: 3, status: "未開始", progress: 0 },
+        { id: 12, name: "移除 Mock，正式串接後端 API", owner: "前端", start: 13, duration: 4, status: "未開始", progress: 0 },
+        { id: 13, name: "搜尋結果頁面開發", owner: "前端", start: 14, duration: 2, status: "未開始", progress: 0 },
+        { id: 14, name: "測試「購物車計算邏輯」", owner: "PM", start: 14, duration: 3, status: "未開始", progress: 0 },
+        { id: 15, name: "全系統 UAT & 壓力測試", owner: "QA", start: 17, duration: 4, status: "未開始", progress: 0 },
+      ];
 
-            const statusOptions = ["未開始", "進行中", "已完成", "延遲"];
+      // --- State ---
+      
+      const [tasks, setTasks] = useState(() => {
+        if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem('project_timeline_tasks_v0');
+          return saved ? JSON.parse(saved) : initialTasks;
+        }
+        return initialTasks;
+      });
 
-            const initialTasks = [
-                { id: 1, name: "制定 API 介面規格書 (購物車/Menu)", owner: "後端", start: 1, duration: 2, status: "進行中", progress: 20 },
-                { id: 2, name: "購物車刷卡結帳 API 開發", owner: "後端", start: 1, duration: 4, status: "進行中", progress: 10 },
-                { id: 3, name: "現有商品頁功能收尾", owner: "前端", start: 1, duration: 3, status: "進行中", progress: 30 },
-                { id: 4, name: "首頁、Megamenu UI/UX 設計", owner: "設計", start: 5, duration: 4, status: "未開始", progress: 0 },
-                { id: 5, name: "依規格建立 Mock Server", owner: "前端", start: 5, duration: 2, status: "未開始", progress: 0 },
-                { id: 6, name: "購物車實體與訂閱功能開發", owner: "後端", start: 5, duration: 4, status: "未開始", progress: 0 },
-                { id: 7, name: "Demo: 瀏覽->購物車->結帳 (假資料)", owner: "前端", start: 7, duration: 2, status: "未開始", progress: 0 },
-                { id: 8, name: "首頁 & Megamenu 開發 (接 Mock)", owner: "前端", start: 9, duration: 4, status: "未開始", progress: 0 },
-                { id: 9, name: "購物車複雜邏輯開發", owner: "後端", start: 9, duration: 4, status: "未開始", progress: 0 },
-                { id: 10, name: "測試「金流通道」連線", owner: "PM", start: 10, duration: 2, status: "未開始", progress: 0 },
-                { id: 11, name: "購物車邏輯完成 & 搜尋 API", owner: "後端", start: 13, duration: 3, status: "未開始", progress: 0 },
-                { id: 12, name: "移除 Mock，正式串接後端 API", owner: "前端", start: 13, duration: 4, status: "未開始", progress: 0 },
-                { id: 13, name: "搜尋結果頁面開發", owner: "前端", start: 14, duration: 2, status: "未開始", progress: 0 },
-                { id: 14, name: "測試「購物車計算邏輯」", owner: "PM", start: 14, duration: 3, status: "未開始", progress: 0 },
-                { id: 15, name: "全系統 UAT & 壓力測試", owner: "QA", start: 17, duration: 4, status: "未開始", progress: 0 },
-            ];
+      const [selectedOwner, setSelectedOwner] = useState('All');
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [editingTask, setEditingTask] = useState(null);
+      
+      // Cloud / Settings State
+      const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+      const [cloudConfig, setCloudConfig] = useState(() => {
+        const saved = localStorage.getItem('pt_firebase_config');
+        return saved ? JSON.parse(saved) : { apiKey: '', authDomain: '', databaseURL: '', projectId: '' };
+      });
+      const [isCloudConnected, setIsCloudConnected] = useState(false);
+      const [dbRef, setDbRef] = useState(null);
 
-            const [tasks, setTasks] = useState(() => {
-                const saved = localStorage.getItem('project_timeline_tasks_html');
-                return saved ? JSON.parse(saved) : initialTasks;
+      // Drag & Drop State
+      const [dragState, setDragState] = useState({
+        isDragging: false,
+        type: null,
+        taskId: null,
+        startX: 0,
+        originalStart: 0,
+        originalDuration: 0,
+      });
+
+      const gridRef = useRef(null);
+
+      // --- Cloud Logic ---
+
+      // Initialize Firebase when config changes
+      useEffect(() => {
+        const initFirebase = async () => {
+          if (!cloudConfig.apiKey || !cloudConfig.databaseURL) {
+            setIsCloudConnected(false);
+            return;
+          }
+          
+          if (!window.Firebase) {
+             console.error("Firebase SDK not loaded");
+             return;
+          }
+
+          try {
+            // Check if already initialized to avoid errors
+            let app;
+            try {
+               // initializeApp throws if called multiple times with same default name, 
+               // but in this simple script context, we might just re-create or catch error.
+               // A simple way is just try/catch.
+               app = window.Firebase.initializeApp(cloudConfig);
+            } catch(e) {
+               // If already exists, we assume it's connected or just proceed
+               // Note: getting the existing app is tricky in this standalone setup without 'getApp' imported
+               // So we just assume if it failed it might be config error or duplicate.
+               // For this demo, we assume the user sets config once correctly.
+               console.log("Firebase init notice:", e);
+            }
+            
+            const db = window.Firebase.getDatabase(app);
+            const tasksRef = window.Firebase.ref(db, 'project_timeline_v1/tasks');
+            
+            setDbRef(tasksRef);
+            setIsCloudConnected(true);
+
+            // Listen for changes
+            window.Firebase.onValue(tasksRef, (snapshot) => {
+              const data = snapshot.val();
+              if (data) {
+                // Check if data is different to avoid unnecessary re-renders (though React handles shallow well)
+                // We trust the cloud data is "newer" or "source of truth"
+                setTasks(data);
+                // Also update local storage to keep them in sync
+                localStorage.setItem('project_timeline_tasks_v0', JSON.stringify(data));
+              }
             });
 
-            const [selectedOwner, setSelectedOwner] = useState('All');
-            const [isModalOpen, setIsModalOpen] = useState(false);
-            const [editingTask, setEditingTask] = useState(null);
-
-            useEffect(() => {
-                localStorage.setItem('project_timeline_tasks_html', JSON.stringify(tasks));
-            }, [tasks]);
-
-            const uniqueOwners = ['All', ...Object.keys(departmentColors)];
-
-            const filteredTasks = selectedOwner === 'All' 
-                ? tasks 
-                : tasks.filter(t => t.owner === selectedOwner);
-
-            const handleAddNew = () => {
-                const newTask = {
-                    id: Date.now(),
-                    name: "新任務",
-                    owner: "PM",
-                    start: 1,
-                    duration: 1,
-                    status: "未開始",
-                    progress: 0
-                };
-                setEditingTask(newTask);
-                setIsModalOpen(true);
-            };
-
-            const handleEdit = (task) => {
-                setEditingTask({ ...task });
-                setIsModalOpen(true);
-            };
-
-            const handleDelete = () => {
-                if (confirm('確定要刪除此任務嗎？')) {
-                    setTasks(tasks.filter(t => t.id !== editingTask.id));
-                    setIsModalOpen(false);
-                }
-            };
-
-            const handleSave = (e) => {
-                e.preventDefault();
-                if (tasks.find(t => t.id === editingTask.id)) {
-                    setTasks(tasks.map(t => t.id === editingTask.id ? editingTask : t));
-                } else {
-                    setTasks([...tasks, editingTask]);
-                }
-                setIsModalOpen(false);
-            };
-
-            const handleReset = () => {
-                if (confirm('確定要重置回預設資料嗎？這將會清除所有您的修改。')) {
-                    setTasks(initialTasks);
-                    localStorage.removeItem('project_timeline_tasks_html');
-                }
-            };
-
-            return (
-                <div className="min-h-screen p-4 md:p-8 font-sans">
-                    <div className="max-w-[1400px] mx-auto bg-white rounded-xl shadow-lg overflow-hidden flex flex-col h-[90vh]">
-                        
-                        {/* Header */}
-                        <div className="bg-slate-800 p-6 text-white flex flex-col md:flex-row justify-between items-start md:items-center shrink-0">
-                            <div>
-                                <h1 className="text-2xl font-bold flex items-center gap-2">
-                                    <Icons.Calendar className="w-6 h-6" />
-                                    專案執行週時程表
-                                </h1>
-                                <p className="text-slate-400 mt-1 text-sm">前後端分離開發 • 網頁版 (資料自動儲存)</p>
-                            </div>
-                            
-                            <div className="mt-4 md:mt-0 flex items-center gap-3">
-                                <button 
-                                    onClick={handleReset}
-                                    className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300 transition-colors"
-                                    title="重置回預設值"
-                                >
-                                    <Icons.RotateCcw size={14} /> 重置
-                                </button>
-
-                                <div className="flex items-center gap-2 bg-slate-700 p-1.5 rounded-lg">
-                                    <Icons.Filter className="w-4 h-4 text-slate-300 ml-1" />
-                                    <select 
-                                        value={selectedOwner}
-                                        onChange={(e) => setSelectedOwner(e.target.value)}
-                                        className="bg-slate-600 text-white text-sm rounded px-2 py-1 border-none focus:ring-2 focus:ring-blue-500 outline-none"
-                                    >
-                                        {uniqueOwners.map(owner => (
-                                            <option key={owner} value={owner}>{owner === 'All' ? '全部單位' : owner}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <button 
-                                    onClick={handleAddNew}
-                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-md transition-all active:scale-95 font-medium text-sm"
-                                >
-                                    <Icons.Plus size={16} /> 新增任務
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Legend */}
-                        <div className="border-b border-gray-100 p-4 flex flex-wrap gap-4 text-sm bg-gray-50 shrink-0">
-                            <div className="font-semibold text-gray-600 mr-2 flex items-center">
-                                <Icons.Edit2 size={14} className="mr-1" /> 
-                                點擊色塊即可編輯
-                            </div>
-                            {Object.entries(departmentColors).map(([dept, colorClass]) => (
-                                <div key={dept} className={`px-3 py-1 rounded-full border ${colorClass} flex items-center gap-1.5 text-xs font-medium`}>
-                                    <span className="w-2 h-2 rounded-full bg-current opacity-60"></span>
-                                    {dept}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Gantt Chart Container */}
-                        <div className="overflow-auto flex-1 relative">
-                            <div className="min-w-[1200px] p-6 pb-20">
-                                
-                                {/* Months Header */}
-                                <div className="grid grid-cols-12 gap-0 mb-1 sticky top-0 z-20 bg-white">
-                                    <div className="col-span-3 bg-white border-b border-gray-200"></div>
-                                    <div className="col-span-9 relative h-8">
-                                        {months.map((month, idx) => (
-                                            <div 
-                                                key={idx} 
-                                                className="absolute top-0 bottom-0 border-l-2 border-slate-300 bg-slate-50 flex items-center justify-center text-sm font-bold text-slate-600 truncate px-2 select-none"
-                                                style={{
-                                                    left: `${((month.start - 1) / totalWeeks) * 100}%`,
-                                                    width: `${(month.span / totalWeeks) * 100}%`
-                                                }}
-                                            >
-                                                {month.name}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Weeks Header */}
-                                <div className="grid grid-cols-12 gap-0 mb-4 sticky top-8 bg-white z-10 shadow-sm">
-                                    <div className="col-span-3 font-bold text-gray-700 px-4 py-2 border-b-2 border-gray-200 bg-gray-50 flex items-center">
-                                        任務名稱 / 負責人
-                                    </div>
-                                    <div className="col-span-9 grid border-b border-gray-200" style={{ gridTemplateColumns: `repeat(${totalWeeks}, 1fr)` }}>
-                                        {weeks.map(week => (
-                                            <div key={week} className="text-center border-l border-gray-100 py-1 bg-white select-none">
-                                                <span className="text-[10px] text-gray-400 block">W</span>
-                                                <span className="text-xs font-bold text-slate-600">{week}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Tasks Rows */}
-                                <div className="space-y-3">
-                                    {filteredTasks.map((task) => {
-                                        const startCol = task.start;
-                                        const spanCol = task.duration;
-                                        const ownerColor = departmentColors[task.owner] || "bg-gray-100 text-gray-800";
-                                        
-                                        return (
-                                            <div 
-                                                key={task.id} 
-                                                onClick={() => handleEdit(task)}
-                                                className="grid grid-cols-12 gap-0 group hover:bg-blue-50/50 transition-colors rounded-lg cursor-pointer border border-transparent hover:border-blue-100"
-                                            >
-                                                
-                                                <div className="col-span-3 px-4 py-2 flex flex-col justify-center border-r border-gray-100 min-h-[50px]">
-                                                    <div className="font-medium text-gray-800 text-sm leading-tight group-hover:text-blue-700">{task.name}</div>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded border ${ownerColor}`}>
-                                                            {task.owner}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="col-span-9 relative grid h-full items-center" style={{ gridTemplateColumns: `repeat(${totalWeeks}, 1fr)` }}>
-                                                    {weeks.map(week => (
-                                                        <div key={week} className={`border-l h-full w-full absolute pointer-events-none ${week % 4 === 1 ? 'border-gray-300' : 'border-gray-50'}`} style={{ left: `${((week-1)/totalWeeks)*100}%` }}></div>
-                                                    ))}
-
-                                                    <div 
-                                                        className={`relative h-6 rounded shadow-sm flex items-center px-2 transition-all duration-300 group-hover:shadow-md
-                                                            ${task.status === '已完成' ? 'bg-gray-200 border-l-4 border-gray-500' : 
-                                                                task.status === '進行中' ? 'bg-blue-100 border-l-4 border-blue-600' : 'bg-white border border-gray-200 border-l-4 border-l-gray-300'
-                                                            }
-                                                        `}
-                                                        style={{
-                                                            gridColumnStart: startCol,
-                                                            gridColumnEnd: `span ${spanCol}`,
-                                                        }}
-                                                    >
-                                                         <div 
-                                                             className={`absolute left-0 top-0 bottom-0 opacity-20 ${
-                                                                 task.status === '已完成' ? 'bg-gray-600' : 'bg-blue-600'
-                                                             }`}
-                                                             style={{ width: `${task.progress}%` }}
-                                                         ></div>
-
-                                                         <div className="flex items-center justify-between w-full relative z-10">
-                                                             <span className="text-[10px] font-medium text-gray-600 truncate">
-                                                                 {task.duration}w
-                                                             </span>
-                                                         </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                {filteredTasks.length === 0 && (
-                                    <div className="text-center py-10 text-gray-400">
-                                        <Icons.AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                                        <p>沒有符合篩選條件的任務，請按右上角新增</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Modal */}
-                        {isModalOpen && editingTask && (
-                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                                <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
-                                    <div className="bg-slate-800 p-4 flex justify-between items-center text-white">
-                                        <h3 className="font-bold flex items-center gap-2">
-                                            <Icons.Edit2 size={18} />
-                                            {tasks.find(t => t.id === editingTask.id) ? '編輯任務' : '新增任務'}
-                                        </h3>
-                                        <button onClick={() => setIsModalOpen(false)} className="hover:bg-slate-700 p-1 rounded transition-colors"><Icons.X size={20} /></button>
-                                    </div>
-                                    
-                                    <form onSubmit={handleSave} className="p-6 space-y-4">
-                                        
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">任務名稱</label>
-                                            <input 
-                                                type="text" 
-                                                required
-                                                value={editingTask.name}
-                                                onChange={(e) => setEditingTask({...editingTask, name: e.target.value})}
-                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                                                placeholder="輸入任務名稱..."
-                                            />
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">負責單位</label>
-                                                <select 
-                                                    value={editingTask.owner}
-                                                    onChange={(e) => setEditingTask({...editingTask, owner: e.target.value})}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none bg-white"
-                                                >
-                                                    {Object.keys(departmentColors).map(d => <option key={d} value={d}>{d}</option>)}
-                                                </select>
-                                            </div>
-                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">目前狀態</label>
-                                                <select 
-                                                    value={editingTask.status}
-                                                    onChange={(e) => setEditingTask({...editingTask, status: e.target.value})}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none bg-white"
-                                                >
-                                                    {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">開始週次 (W1-W20)</label>
-                                                <input 
-                                                    type="number" 
-                                                    min="1" 
-                                                    max="20"
-                                                    value={editingTask.start}
-                                                    onChange={(e) => setEditingTask({...editingTask, start: parseInt(e.target.value) || 1})}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">持續週數</label>
-                                                <input 
-                                                    type="number" 
-                                                    min="1" 
-                                                    max="20"
-                                                    value={editingTask.duration}
-                                                    onChange={(e) => setEditingTask({...editingTask, duration: parseInt(e.target.value) || 1})}
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                完成進度: {editingTask.progress}%
-                                            </label>
-                                            <input 
-                                                type="range" 
-                                                min="0" 
-                                                max="100" 
-                                                step="5"
-                                                value={editingTask.progress}
-                                                onChange={(e) => setEditingTask({...editingTask, progress: parseInt(e.target.value)})}
-                                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                                            />
-                                        </div>
-
-                                        <div className="pt-4 flex justify-between items-center border-t border-gray-100 mt-4">
-                                            {tasks.find(t => t.id === editingTask.id) ? (
-                                                <button 
-                                                    type="button" 
-                                                    onClick={handleDelete}
-                                                    className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-red-50"
-                                                >
-                                                    <Icons.Trash2 size={16} /> 刪除任務
-                                                </button>
-                                            ) : (
-                                                <div></div>
-                                            )}
-                                            
-                                            <div className="flex gap-3">
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setIsModalOpen(false)}
-                                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors font-medium"
-                                                >
-                                                    取消
-                                                </button>
-                                                <button 
-                                                    type="submit" 
-                                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-md transition-all active:scale-95 flex items-center gap-2 font-medium"
-                                                >
-                                                    <Icons.Save size={18} /> 儲存變更
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                    </form>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
+          } catch (error) {
+            console.error("Firebase Connection Error:", error);
+            setIsCloudConnected(false);
+          }
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+        initFirebase();
+      }, [cloudConfig]);
+
+      // Helper to save to cloud
+      const saveToCloud = (newTasks) => {
+        if (isCloudConnected && dbRef && window.Firebase) {
+          window.Firebase.set(dbRef, newTasks)
+            .then(() => console.log("Saved to cloud"))
+            .catch(err => console.error("Cloud save failed", err));
+        }
+      };
+
+      // Local Persistence (Always run as backup)
+      useEffect(() => {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('project_timeline_tasks_v0', JSON.stringify(tasks));
+        }
+      }, [tasks]);
+
+      // Save Config Handler
+      const handleSaveConfig = (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const config = {
+          apiKey: formData.get('apiKey'),
+          authDomain: formData.get('authDomain'),
+          databaseURL: formData.get('databaseURL'),
+          projectId: formData.get('projectId'),
+        };
+        setCloudConfig(config);
+        localStorage.setItem('pt_firebase_config', JSON.stringify(config));
+        setIsSettingsOpen(false);
+        alert("設定已儲存，嘗試連線中...");
+        window.location.reload(); // Reload to ensure clean firebase init
+      };
+
+
+      const uniqueOwners = ['All', ...Object.keys(departmentColors)];
+
+      // Sort Logic
+      const filteredTasks = (selectedOwner === 'All' 
+        ? tasks 
+        : tasks.filter((t) => t.owner === selectedOwner))
+        .sort((a, b) => {
+          if (a.start !== b.start) return a.start - b.start;
+          return a.id - b.id;
+        });
+
+      // --- Task Handlers ---
+      
+      const handleAddNew = () => {
+        const newTask = {
+          id: Date.now(),
+          name: "新任務",
+          owner: "PM",
+          start: 1,
+          duration: 1,
+          status: "未開始",
+          progress: 0
+        };
+        setEditingTask(newTask);
+        setIsModalOpen(true);
+      };
+
+      const handleEdit = (task) => {
+        setEditingTask({ ...task });
+        setIsModalOpen(true);
+      };
+
+      const handleDelete = () => {
+        if (window.confirm('確定要刪除此任務嗎？')) {
+          const newTasks = tasks.filter((t) => t.id !== editingTask.id);
+          setTasks(newTasks);
+          saveToCloud(newTasks); // Sync delete
+          setIsModalOpen(false);
+        }
+      };
+
+      const handleSave = (e) => {
+        e.preventDefault();
+        let newTasks;
+        if (tasks.find((t) => t.id === editingTask.id)) {
+          newTasks = tasks.map((t) => t.id === editingTask.id ? editingTask : t);
+        } else {
+          newTasks = [...tasks, editingTask];
+        }
+        setTasks(newTasks);
+        saveToCloud(newTasks); // Sync save
+        setIsModalOpen(false);
+      };
+
+      const handleReset = () => {
+        if (window.confirm('確定要重置回預設資料嗎？這將會清除所有您的修改。')) {
+          setTasks(initialTasks);
+          saveToCloud(initialTasks); // Sync reset
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('project_timeline_tasks_v0');
+          }
+        }
+      };
+
+      // --- Drag & Drop Logic ---
+
+      const handleMouseDown = (e, task, type) => {
+        e.stopPropagation(); 
+        
+        setDragState({
+          isDragging: true,
+          type,
+          taskId: task.id,
+          startX: e.clientX,
+          originalStart: task.start,
+          originalDuration: task.duration,
+        });
+      };
+
+      // Global Mouse Move & Up Listeners
+      useEffect(() => {
+        const handleMouseMove = (e) => {
+          if (!dragState.isDragging || !gridRef.current) return;
+
+          const gridWidth = gridRef.current.offsetWidth;
+          const weekWidth = gridWidth / totalWeeks;
+          const deltaX = e.clientX - dragState.startX;
+          const deltaWeeks = Math.round(deltaX / weekWidth);
+
+          if (dragState.type === 'move') {
+            let newStart = dragState.originalStart + deltaWeeks;
+            newStart = Math.max(1, Math.min(newStart, totalWeeks - dragState.originalDuration + 1));
+            
+            setTasks((prev) => prev.map(t => 
+              t.id === dragState.taskId ? { ...t, start: newStart } : t
+            ));
+          } else if (dragState.type === 'resize') {
+            let newDuration = dragState.originalDuration + deltaWeeks;
+            newDuration = Math.max(1, Math.min(newDuration, totalWeeks - dragState.originalStart + 1));
+            
+            setTasks((prev) => prev.map(t => 
+              t.id === dragState.taskId ? { ...t, duration: newDuration } : t
+            ));
+          }
+        };
+
+        const handleMouseUp = () => {
+          if (dragState.isDragging) {
+            // Sync on drag end
+            // We need to access the LATEST 'tasks' state here. 
+            // Since 'tasks' in this closure might be stale depending on dependency array,
+            // but we are updating state via functional update in mouseMove.
+            // Best way: use a ref or rely on the next render cycle?
+            // Actually, handleMouseMove updates state visually. 
+            // We should trigger a Cloud Save here.
+            
+            // To get the latest state inside this event listener, we can use a functional state update trick
+            // OR simpler: since `tasks` is in the dependency array, this effect recreates on task change?
+            // No, that would be bad for performance attaching/detaching listeners.
+            
+            // Strategy: We won't save *inside* this listener. We will set a "needSave" flag or 
+            // just let the user know they modified it.
+            // BETTER: Just trigger the save in the 'setDragState' closure if we had access.
+            // WORKAROUND: We will trigger a specific effect or just read state from a ref.
+            
+            setDragState(prev => {
+                if (prev.taskId) {
+                    // We need to trigger a save. 
+                    // Since we can't easily access the calculated new state here without complex logic,
+                    // we will rely on the fact that 'tasks' state has been updated by mouseMove.
+                    // However, react state updates are async.
+                    setTimeout(() => {
+                        // Use a ref to access current tasks would be ideal, but let's try a simple approach:
+                        // We will set a "shouldSync" state? No.
+                        // We will pass the save responsibility to a helper that reads the ref.
+                    }, 100);
+                }
+                return { ...prev, isDragging: false, taskId: null };
+            });
+          }
+        };
+
+        if (dragState.isDragging) {
+          window.addEventListener('mousemove', handleMouseMove);
+          window.addEventListener('mouseup', handleMouseUp);
+          document.body.style.cursor = dragState.type === 'move' ? 'grabbing' : 'ew-resize';
+          document.body.style.userSelect = 'none';
+        } else {
+          document.body.style.cursor = 'default';
+          document.body.style.userSelect = 'auto';
+        }
+
+        return () => {
+          window.removeEventListener('mousemove', handleMouseMove);
+          window.removeEventListener('mouseup', handleMouseUp);
+        };
+      }, [dragState, totalWeeks]);
+
+      // Ref to keep track of tasks for the drag-end save
+      const tasksRef = useRef(tasks);
+      useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
+      // Monitor drag end to save
+      useEffect(() => {
+        if (!dragState.isDragging && dragState.taskId !== null) {
+            // Drag just ended. Save current tasks to cloud.
+            // We use the ref to ensure we have the absolute latest committed state
+            saveToCloud(tasksRef.current);
+        }
+      }, [dragState.isDragging]);
+
+
+      return (
+        <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
+          <div className="max-w-[1400px] mx-auto bg-white rounded-xl shadow-lg overflow-hidden flex flex-col h-[90vh]">
+            
+            {/* Header */}
+            <div className="bg-slate-800 p-6 text-white flex flex-col md:flex-row justify-between items-start md:items-center shrink-0">
+              <div>
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  <CalendarIcon className="w-6 h-6" />
+                  專案執行週時程表
+                </h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-slate-400 text-sm">操作提示：拖曳移動任務 • 拉動邊緣縮放 • 點兩下編輯</p>
+                  
+                  {/* Cloud Status Indicator */}
+                  <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${isCloudConnected ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-slate-700 border-slate-600 text-slate-400'}`}>
+                    {isCloudConnected ? <Cloud size={12} /> : <CloudOff size={12} />}
+                    {isCloudConnected ? "已連線同步中" : "僅本機儲存"}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 md:mt-0 flex items-center gap-3">
+                 <button 
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300 transition-colors"
+                  title="設定雲端同步"
+                >
+                  <Settings size={14} /> 同步設定
+                </button>
+
+                 <button 
+                  onClick={handleReset}
+                  className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300 transition-colors"
+                  title="重置回預設值"
+                >
+                  <RotateCcw size={14} /> 重置
+                </button>
+
+                <div className="flex items-center gap-2 bg-slate-700 p-1.5 rounded-lg">
+                  <Filter className="w-4 h-4 text-slate-300 ml-1" />
+                  <select 
+                    value={selectedOwner}
+                    onChange={(e) => setSelectedOwner(e.target.value)}
+                    className="bg-slate-600 text-white text-sm rounded px-2 py-1 border-none focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    {uniqueOwners.map(owner => (
+                      <option key={owner} value={owner}>{owner === 'All' ? '全部單位' : owner}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button 
+                  onClick={handleAddNew}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-md transition-all active:scale-95 font-medium text-sm"
+                >
+                  <Plus size={16} /> 新增任務
+                </button>
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="border-b border-gray-100 p-4 flex flex-wrap gap-4 text-sm bg-gray-50 shrink-0">
+              <div className="font-semibold text-gray-600 mr-2 flex items-center">
+                <GripHorizontal size={14} className="mr-1" /> 
+                可直接拖曳調整
+              </div>
+              {Object.entries(departmentColors).map(([dept, colorClass]) => (
+                <div key={dept} className={`px-3 py-1 rounded-full border ${colorClass} flex items-center gap-1.5 text-xs font-medium`}>
+                  <span className="w-2 h-2 rounded-full bg-current opacity-60"></span>
+                  {dept}
+                </div>
+              ))}
+            </div>
+
+            {/* Gantt Chart Container */}
+            <div className="overflow-auto flex-1 relative select-none">
+              <div className="min-w-[1200px] p-6 pb-20">
+                
+                {/* Months Header */}
+                <div className="grid grid-cols-12 gap-0 mb-1 sticky top-0 z-20 bg-white">
+                  <div className="col-span-3 bg-white border-b border-gray-200"></div>
+                  <div className="col-span-9 relative h-8">
+                     {months.map((month, idx) => (
+                       <div 
+                        key={idx} 
+                        className="absolute top-0 bottom-0 border-l-2 border-slate-300 bg-slate-50 flex items-center justify-center text-sm font-bold text-slate-600 truncate px-2"
+                        style={{
+                          left: `${((month.start - 1) / totalWeeks) * 100}%`,
+                          width: `${(month.span / totalWeeks) * 100}%`
+                        }}
+                       >
+                         {month.name}
+                       </div>
+                     ))}
+                  </div>
+                </div>
+
+                {/* Weeks Header */}
+                <div className="grid grid-cols-12 gap-0 mb-4 sticky top-8 bg-white z-10 shadow-sm">
+                  <div className="col-span-3 font-bold text-gray-700 px-4 py-2 border-b-2 border-gray-200 bg-gray-50 flex items-center">
+                    任務名稱 / 負責人
+                  </div>
+                  <div className="col-span-9 grid border-b border-gray-200" style={{ gridTemplateColumns: `repeat(${totalWeeks}, 1fr)` }}>
+                    {weeks.map(week => (
+                      <div key={week} className="text-center border-l border-gray-100 py-1 bg-white">
+                        <span className="text-[10px] text-gray-400 block">W</span>
+                        <span className="text-xs font-bold text-slate-600">{week}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tasks Rows */}
+                <div className="space-y-3">
+                  {filteredTasks.map((task) => {
+                    const startCol = task.start;
+                    const spanCol = task.duration;
+                    const ownerColor = departmentColors[task.owner] || "bg-gray-100 text-gray-800";
+                    
+                    return (
+                      <div 
+                        key={task.id} 
+                        onDoubleClick={() => handleEdit(task)}
+                        className="grid grid-cols-12 gap-0 group hover:bg-blue-50/50 transition-colors rounded-lg border border-transparent hover:border-blue-100"
+                      >
+                        
+                        {/* Task Info Column */}
+                        <div className="col-span-3 px-4 py-2 flex flex-col justify-center border-r border-gray-100 min-h-[50px]">
+                          <div className="font-medium text-gray-800 text-sm leading-tight group-hover:text-blue-700 cursor-text">{task.name}</div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-[10px] px-2 py-0.5 rounded border ${ownerColor}`}>
+                              {task.owner}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Timeline Grid Column */}
+                        <div ref={gridRef} className="col-span-9 relative grid h-full items-center" style={{ gridTemplateColumns: `repeat(${totalWeeks}, 1fr)` }}>
+                          {weeks.map(week => (
+                            <div key={week} className={`border-l h-full w-full absolute pointer-events-none ${week % 4 === 1 ? 'border-gray-300' : 'border-gray-50'}`} style={{ left: `${((week-1)/totalWeeks)*100}%` }}></div>
+                          ))}
+
+                          {/* The Bar */}
+                          <div 
+                            className={`relative h-6 rounded shadow-sm flex items-center px-2 transition-all duration-75
+                              ${task.status === '已完成' ? 'bg-gray-200 border-l-4 border-gray-500' : 
+                                task.status === '進行中' ? 'bg-blue-100 border-l-4 border-blue-600' : 'bg-white border border-gray-200 border-l-4 border-l-gray-300'
+                              }
+                              ${dragState.taskId === task.id ? 'opacity-80 ring-2 ring-blue-400 z-50 shadow-lg' : 'hover:shadow-md'}
+                              cursor-grab active:cursor-grabbing
+                            `}
+                            style={{
+                              gridColumnStart: startCol,
+                              gridColumnEnd: `span ${spanCol}`,
+                            }}
+                            onMouseDown={(e) => handleMouseDown(e, task, 'move')}
+                          >
+                             {/* Progress Bar inside the task bar */}
+                             <div 
+                               className={`absolute left-0 top-0 bottom-0 opacity-20 pointer-events-none ${
+                                 task.status === '已完成' ? 'bg-gray-600' : 'bg-blue-600'
+                               }`}
+                               style={{ width: `${task.progress}%` }}
+                             ></div>
+
+                             <div className="flex items-center justify-between w-full relative z-10 pointer-events-none">
+                               <span className="text-[10px] font-medium text-gray-600 truncate">
+                                 {task.duration}w
+                               </span>
+                             </div>
+
+                             {/* Resize Handle (Right) */}
+                             <div 
+                               className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize flex items-center justify-center group/handle hover:bg-black/10 rounded-r"
+                               onMouseDown={(e) => handleMouseDown(e, task, 'resize')}
+                             >
+                                <div className="w-1 h-3 bg-gray-400 rounded-full group-hover/handle:bg-gray-600"></div>
+                             </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Empty State */}
+                {filteredTasks.length === 0 && (
+                  <div className="text-center py-10 text-gray-400">
+                    <AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                    <p>沒有符合篩選條件的任務，請按右上角新增</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Cloud Config Modal */}
+            {isSettingsOpen && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in">
+                  <div className="bg-slate-800 p-4 flex justify-between items-center text-white">
+                    <h3 className="font-bold flex items-center gap-2">
+                      <Settings size={18} />
+                      雲端同步設定 (Firebase)
+                    </h3>
+                    <button onClick={() => setIsSettingsOpen(false)} className="hover:bg-slate-700 p-1 rounded transition-colors"><X size={20} /></button>
+                  </div>
+                  
+                  <form onSubmit={handleSaveConfig} className="p-6 space-y-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-800 mb-4">
+                      <strong>如何同步？</strong><br/>
+                      請前往 <a href="https://console.firebase.google.com/" target="_blank" className="underline">Firebase Console</a> 建立免費專案，新增 "Realtime Database"，並將規則設為 true (測試用) 或設定適當權限。將專案的 Config 貼在下方即可實現多裝置同步。
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Database URL</label>
+                      <input name="databaseURL" placeholder="https://your-project.firebaseio.com" defaultValue={cloudConfig.databaseURL} className="w-full border p-2 rounded text-sm" required />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">API Key</label>
+                      <input name="apiKey" type="password" placeholder="AIza..." defaultValue={cloudConfig.apiKey} className="w-full border p-2 rounded text-sm" required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Project ID</label>
+                        <input name="projectId" placeholder="my-project-id" defaultValue={cloudConfig.projectId} className="w-full border p-2 rounded text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Auth Domain</label>
+                        <input name="authDomain" placeholder="my-project.firebaseapp.com" defaultValue={cloudConfig.authDomain} className="w-full border p-2 rounded text-sm" />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4">
+                      <button type="button" onClick={() => setIsSettingsOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">取消</button>
+                      <button type="submit" className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-md font-medium">儲存並連線</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Edit Modal */}
+            {isModalOpen && editingTask && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in">
+                  <div className="bg-slate-800 p-4 flex justify-between items-center text-white">
+                    <h3 className="font-bold flex items-center gap-2">
+                      <Edit2 size={18} />
+                      {tasks.find((t) => t.id === editingTask.id) ? '編輯任務' : '新增任務'}
+                    </h3>
+                    <button onClick={() => setIsModalOpen(false)} className="hover:bg-slate-700 p-1 rounded transition-colors"><X size={20} /></button>
+                  </div>
+                  
+                  <form onSubmit={handleSave} className="p-6 space-y-4">
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">任務名稱</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={editingTask.name}
+                        onChange={(e) => setEditingTask({...editingTask, name: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">負責單位</label>
+                        <select 
+                          value={editingTask.owner}
+                          onChange={(e) => setEditingTask({...editingTask, owner: e.target.value})}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none bg-white"
+                        >
+                          {Object.keys(departmentColors).map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                      </div>
+                       <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">目前狀態</label>
+                        <select 
+                          value={editingTask.status}
+                          onChange={(e) => setEditingTask({...editingTask, status: e.target.value})}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none bg-white"
+                        >
+                          {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        完成進度: {editingTask.progress}%
+                      </label>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        step="5"
+                        value={editingTask.progress}
+                        onChange={(e) => setEditingTask({...editingTask, progress: parseInt(e.target.value)})}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                    </div>
+
+                    <div className="pt-4 flex justify-between items-center border-t border-gray-100 mt-4">
+                      {tasks.find((t) => t.id === editingTask.id) ? (
+                        <button 
+                          type="button" 
+                          onClick={handleDelete}
+                          className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-red-50"
+                        >
+                          <Trash2 size={16} /> 刪除任務
+                        </button>
+                      ) : (
+                        <div></div>
+                      )}
+                      
+                      <div className="flex gap-3">
+                        <button 
+                          type="button" 
+                          onClick={() => setIsModalOpen(false)}
+                          className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                        >
+                          取消
+                        </button>
+                        <button 
+                          type="submit" 
+                          className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-md transition-all active:scale-95 flex items-center gap-2 font-medium"
+                        >
+                          <Save size={18} /> 儲存變更
+                        </button>
+                      </div>
+                    </div>
+
+                  </form>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<ProjectTimeline />);
+  </script>
 </body>
 </html>
