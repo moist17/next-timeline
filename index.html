@@ -165,9 +165,19 @@
       
       // Cloud / Settings State
       const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+      // HARDCODED CONFIG: Automatically connect for all users
       const [cloudConfig, setCloudConfig] = useState(() => {
         const saved = localStorage.getItem('pt_firebase_config');
-        return saved ? JSON.parse(saved) : { apiKey: '', authDomain: '', databaseURL: '', projectId: '' };
+        return saved ? JSON.parse(saved) : {
+          apiKey: "AIzaSyDiECD7bbUZtObayvte40KFah9AY74LZoo",
+          authDomain: "nexttimeline-b3ce9.firebaseapp.com",
+          databaseURL: "https://nexttimeline-b3ce9-default-rtdb.firebaseio.com",
+          projectId: "nexttimeline-b3ce9",
+          storageBucket: "nexttimeline-b3ce9.firebasestorage.app",
+          messagingSenderId: "744189602198",
+          appId: "1:744189602198:web:b6073c40d732cd2ce895b7",
+          measurementId: "G-KN23TPR4YM"
+        };
       });
       const [isCloudConnected, setIsCloudConnected] = useState(false);
       const [dbRef, setDbRef] = useState(null);
