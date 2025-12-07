@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>專案執行週時程表</title>
+    
+    <!-- 引入 React 與 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 引入 Babel 用於解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        body { font-family: "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        /* 自定義捲軸樣式 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- 圖示組件 (內建 SVG 以確保無需外部依賴) ---
+        const Icon = ({ path, size = 20, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            Calendar: (props) => <Icon {...props} path={<><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></>} />,
+            User: (props) => <Icon {...props} path={<><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></>} />,
+            Filter: (props) => <Icon {...props} path={<><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></>} />,
+            Plus: (props) => <Icon {...props} path={<><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></>} />,
+            X: (props) => <Icon {...props} path={<><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></>} />,
+            Edit2: (props) => <Icon {...props} path={<><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></>} />,
+            Trash2: (props) => <Icon {...props} path={<><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></>} />,
+            Save: (props) => <Icon {...props} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></>} />,
+            RotateCcw: (props) => <Icon {...props} path={<><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></>} />,
+            AlertCircle: (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></>} />
+        };
+
+        // --- 主應用程式 ---
+        const App = () => {
+            const totalWeeks = 20;
+            const weeks = Array.from({ length: totalWeeks }, (_, i) => i + 1);
+
+            const months = [
+                { name: '12 月 (定義與基礎)', start: 1, span: 4 },
+                { name: '1 月 (視覺與 Mock)', start: 5, span: 4 },
+                { name: '2 月 (前端提早開發)', start: 9, span: 4 },
+                { name: '3 月 (串接與整合)', start: 13, span: 4 },
+                { name: '4 月 (驗收與除錯)', start: 17, span: 4 },
+            ];
+
+            const departmentColors = {
+                "PM": "bg-blue-100 text-blue-800 border-blue-200",
+                "設計": "bg-purple-100 text-purple-800 border-purple-200",
+                "前端": "bg-emerald-100 text-emerald-800 border-emerald-200",
+                "後端": "bg-cyan-100 text-cyan-800 border-cyan-200",
+                "QA": "bg-orange-100 text-orange-800 border-orange-200",
+                "行銷": "bg-pink-100 text-pink-800 border-pink-200",
+            };
+
+            const statusOptions = ["未開始", "進行中", "已完成", "延遲"];
+
+            const initialTasks = [
+                { id: 1, name: "制定 API 介面規格書 (購物車/Menu)", owner: "後端", start: 1, duration: 2, status: "進行中", progress: 20 },
+                { id: 2, name: "購物車刷卡結帳 API 開發", owner: "後端", start: 1, duration: 4, status: "進行中", progress: 10 },
+                { id: 3, name: "現有商品頁功能收尾", owner: "前端", start: 1, duration: 3, status: "進行中", progress: 30 },
+                { id: 4, name: "首頁、Megamenu UI/UX 設計", owner: "設計", start: 5, duration: 4, status: "未開始", progress: 0 },
+                { id: 5, name: "依規格建立 Mock Server", owner: "前端", start: 5, duration: 2, status: "未開始", progress: 0 },
+                { id: 6, name: "購物車實體與訂閱功能開發", owner: "後端", start: 5, duration: 4, status: "未開始", progress: 0 },
+                { id: 7, name: "Demo: 瀏覽->購物車->結帳 (假資料)", owner: "前端", start: 7, duration: 2, status: "未開始", progress: 0 },
+                { id: 8, name: "首頁 & Megamenu 開發 (接 Mock)", owner: "前端", start: 9, duration: 4, status: "未開始", progress: 0 },
+                { id: 9, name: "購物車複雜邏輯開發", owner: "後端", start: 9, duration: 4, status: "未開始", progress: 0 },
+                { id: 10, name: "測試「金流通道」連線", owner: "PM", start: 10, duration: 2, status: "未開始", progress: 0 },
+                { id: 11, name: "購物車邏輯完成 & 搜尋 API", owner: "後端", start: 13, duration: 3, status: "未開始", progress: 0 },
+                { id: 12, name: "移除 Mock，正式串接後端 API", owner: "前端", start: 13, duration: 4, status: "未開始", progress: 0 },
+                { id: 13, name: "搜尋結果頁面開發", owner: "前端", start: 14, duration: 2, status: "未開始", progress: 0 },
+                { id: 14, name: "測試「購物車計算邏輯」", owner: "PM", start: 14, duration: 3, status: "未開始", progress: 0 },
+                { id: 15, name: "全系統 UAT & 壓力測試", owner: "QA", start: 17, duration: 4, status: "未開始", progress: 0 },
+            ];
+
+            const [tasks, setTasks] = useState(() => {
+                const saved = localStorage.getItem('project_timeline_tasks_html');
+                return saved ? JSON.parse(saved) : initialTasks;
+            });
+
+            const [selectedOwner, setSelectedOwner] = useState('All');
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingTask, setEditingTask] = useState(null);
+
+            useEffect(() => {
+                localStorage.setItem('project_timeline_tasks_html', JSON.stringify(tasks));
+            }, [tasks]);
+
+            const uniqueOwners = ['All', ...Object.keys(departmentColors)];
+
+            const filteredTasks = selectedOwner === 'All' 
+                ? tasks 
+                : tasks.filter(t => t.owner === selectedOwner);
+
+            const handleAddNew = () => {
+                const newTask = {
+                    id: Date.now(),
+                    name: "新任務",
+                    owner: "PM",
+                    start: 1,
+                    duration: 1,
+                    status: "未開始",
+                    progress: 0
+                };
+                setEditingTask(newTask);
+                setIsModalOpen(true);
+            };
+
+            const handleEdit = (task) => {
+                setEditingTask({ ...task });
+                setIsModalOpen(true);
+            };
+
+            const handleDelete = () => {
+                if (confirm('確定要刪除此任務嗎？')) {
+                    setTasks(tasks.filter(t => t.id !== editingTask.id));
+                    setIsModalOpen(false);
+                }
+            };
+
+            const handleSave = (e) => {
+                e.preventDefault();
+                if (tasks.find(t => t.id === editingTask.id)) {
+                    setTasks(tasks.map(t => t.id === editingTask.id ? editingTask : t));
+                } else {
+                    setTasks([...tasks, editingTask]);
+                }
+                setIsModalOpen(false);
+            };
+
+            const handleReset = () => {
+                if (confirm('確定要重置回預設資料嗎？這將會清除所有您的修改。')) {
+                    setTasks(initialTasks);
+                    localStorage.removeItem('project_timeline_tasks_html');
+                }
+            };
+
+            return (
+                <div className="min-h-screen p-4 md:p-8 font-sans">
+                    <div className="max-w-[1400px] mx-auto bg-white rounded-xl shadow-lg overflow-hidden flex flex-col h-[90vh]">
+                        
+                        {/* Header */}
+                        <div className="bg-slate-800 p-6 text-white flex flex-col md:flex-row justify-between items-start md:items-center shrink-0">
+                            <div>
+                                <h1 className="text-2xl font-bold flex items-center gap-2">
+                                    <Icons.Calendar className="w-6 h-6" />
+                                    專案執行週時程表
+                                </h1>
+                                <p className="text-slate-400 mt-1 text-sm">前後端分離開發 • 網頁版 (資料自動儲存)</p>
+                            </div>
+                            
+                            <div className="mt-4 md:mt-0 flex items-center gap-3">
+                                <button 
+                                    onClick={handleReset}
+                                    className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300 transition-colors"
+                                    title="重置回預設值"
+                                >
+                                    <Icons.RotateCcw size={14} /> 重置
+                                </button>
+
+                                <div className="flex items-center gap-2 bg-slate-700 p-1.5 rounded-lg">
+                                    <Icons.Filter className="w-4 h-4 text-slate-300 ml-1" />
+                                    <select 
+                                        value={selectedOwner}
+                                        onChange={(e) => setSelectedOwner(e.target.value)}
+                                        className="bg-slate-600 text-white text-sm rounded px-2 py-1 border-none focus:ring-2 focus:ring-blue-500 outline-none"
+                                    >
+                                        {uniqueOwners.map(owner => (
+                                            <option key={owner} value={owner}>{owner === 'All' ? '全部單位' : owner}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <button 
+                                    onClick={handleAddNew}
+                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-md transition-all active:scale-95 font-medium text-sm"
+                                >
+                                    <Icons.Plus size={16} /> 新增任務
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Legend */}
+                        <div className="border-b border-gray-100 p-4 flex flex-wrap gap-4 text-sm bg-gray-50 shrink-0">
+                            <div className="font-semibold text-gray-600 mr-2 flex items-center">
+                                <Icons.Edit2 size={14} className="mr-1" /> 
+                                點擊色塊即可編輯
+                            </div>
+                            {Object.entries(departmentColors).map(([dept, colorClass]) => (
+                                <div key={dept} className={`px-3 py-1 rounded-full border ${colorClass} flex items-center gap-1.5 text-xs font-medium`}>
+                                    <span className="w-2 h-2 rounded-full bg-current opacity-60"></span>
+                                    {dept}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Gantt Chart Container */}
+                        <div className="overflow-auto flex-1 relative">
+                            <div className="min-w-[1200px] p-6 pb-20">
+                                
+                                {/* Months Header */}
+                                <div className="grid grid-cols-12 gap-0 mb-1 sticky top-0 z-20 bg-white">
+                                    <div className="col-span-3 bg-white border-b border-gray-200"></div>
+                                    <div className="col-span-9 relative h-8">
+                                        {months.map((month, idx) => (
+                                            <div 
+                                                key={idx} 
+                                                className="absolute top-0 bottom-0 border-l-2 border-slate-300 bg-slate-50 flex items-center justify-center text-sm font-bold text-slate-600 truncate px-2 select-none"
+                                                style={{
+                                                    left: `${((month.start - 1) / totalWeeks) * 100}%`,
+                                                    width: `${(month.span / totalWeeks) * 100}%`
+                                                }}
+                                            >
+                                                {month.name}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Weeks Header */}
+                                <div className="grid grid-cols-12 gap-0 mb-4 sticky top-8 bg-white z-10 shadow-sm">
+                                    <div className="col-span-3 font-bold text-gray-700 px-4 py-2 border-b-2 border-gray-200 bg-gray-50 flex items-center">
+                                        任務名稱 / 負責人
+                                    </div>
+                                    <div className="col-span-9 grid border-b border-gray-200" style={{ gridTemplateColumns: `repeat(${totalWeeks}, 1fr)` }}>
+                                        {weeks.map(week => (
+                                            <div key={week} className="text-center border-l border-gray-100 py-1 bg-white select-none">
+                                                <span className="text-[10px] text-gray-400 block">W</span>
+                                                <span className="text-xs font-bold text-slate-600">{week}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Tasks Rows */}
+                                <div className="space-y-3">
+                                    {filteredTasks.map((task) => {
+                                        const startCol = task.start;
+                                        const spanCol = task.duration;
+                                        const ownerColor = departmentColors[task.owner] || "bg-gray-100 text-gray-800";
+                                        
+                                        return (
+                                            <div 
+                                                key={task.id} 
+                                                onClick={() => handleEdit(task)}
+                                                className="grid grid-cols-12 gap-0 group hover:bg-blue-50/50 transition-colors rounded-lg cursor-pointer border border-transparent hover:border-blue-100"
+                                            >
+                                                
+                                                <div className="col-span-3 px-4 py-2 flex flex-col justify-center border-r border-gray-100 min-h-[50px]">
+                                                    <div className="font-medium text-gray-800 text-sm leading-tight group-hover:text-blue-700">{task.name}</div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded border ${ownerColor}`}>
+                                                            {task.owner}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="col-span-9 relative grid h-full items-center" style={{ gridTemplateColumns: `repeat(${totalWeeks}, 1fr)` }}>
+                                                    {weeks.map(week => (
+                                                        <div key={week} className={`border-l h-full w-full absolute pointer-events-none ${week % 4 === 1 ? 'border-gray-300' : 'border-gray-50'}`} style={{ left: `${((week-1)/totalWeeks)*100}%` }}></div>
+                                                    ))}
+
+                                                    <div 
+                                                        className={`relative h-6 rounded shadow-sm flex items-center px-2 transition-all duration-300 group-hover:shadow-md
+                                                            ${task.status === '已完成' ? 'bg-gray-200 border-l-4 border-gray-500' : 
+                                                                task.status === '進行中' ? 'bg-blue-100 border-l-4 border-blue-600' : 'bg-white border border-gray-200 border-l-4 border-l-gray-300'
+                                                            }
+                                                        `}
+                                                        style={{
+                                                            gridColumnStart: startCol,
+                                                            gridColumnEnd: `span ${spanCol}`,
+                                                        }}
+                                                    >
+                                                         <div 
+                                                             className={`absolute left-0 top-0 bottom-0 opacity-20 ${
+                                                                 task.status === '已完成' ? 'bg-gray-600' : 'bg-blue-600'
+                                                             }`}
+                                                             style={{ width: `${task.progress}%` }}
+                                                         ></div>
+
+                                                         <div className="flex items-center justify-between w-full relative z-10">
+                                                             <span className="text-[10px] font-medium text-gray-600 truncate">
+                                                                 {task.duration}w
+                                                             </span>
+                                                         </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {filteredTasks.length === 0 && (
+                                    <div className="text-center py-10 text-gray-400">
+                                        <Icons.AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                                        <p>沒有符合篩選條件的任務，請按右上角新增</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Modal */}
+                        {isModalOpen && editingTask && (
+                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                                <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+                                    <div className="bg-slate-800 p-4 flex justify-between items-center text-white">
+                                        <h3 className="font-bold flex items-center gap-2">
+                                            <Icons.Edit2 size={18} />
+                                            {tasks.find(t => t.id === editingTask.id) ? '編輯任務' : '新增任務'}
+                                        </h3>
+                                        <button onClick={() => setIsModalOpen(false)} className="hover:bg-slate-700 p-1 rounded transition-colors"><Icons.X size={20} /></button>
+                                    </div>
+                                    
+                                    <form onSubmit={handleSave} className="p-6 space-y-4">
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">任務名稱</label>
+                                            <input 
+                                                type="text" 
+                                                required
+                                                value={editingTask.name}
+                                                onChange={(e) => setEditingTask({...editingTask, name: e.target.value})}
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="輸入任務名稱..."
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">負責單位</label>
+                                                <select 
+                                                    value={editingTask.owner}
+                                                    onChange={(e) => setEditingTask({...editingTask, owner: e.target.value})}
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none bg-white"
+                                                >
+                                                    {Object.keys(departmentColors).map(d => <option key={d} value={d}>{d}</option>)}
+                                                </select>
+                                            </div>
+                                             <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">目前狀態</label>
+                                                <select 
+                                                    value={editingTask.status}
+                                                    onChange={(e) => setEditingTask({...editingTask, status: e.target.value})}
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none bg-white"
+                                                >
+                                                    {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">開始週次 (W1-W20)</label>
+                                                <input 
+                                                    type="number" 
+                                                    min="1" 
+                                                    max="20"
+                                                    value={editingTask.start}
+                                                    onChange={(e) => setEditingTask({...editingTask, start: parseInt(e.target.value) || 1})}
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">持續週數</label>
+                                                <input 
+                                                    type="number" 
+                                                    min="1" 
+                                                    max="20"
+                                                    value={editingTask.duration}
+                                                    onChange={(e) => setEditingTask({...editingTask, duration: parseInt(e.target.value) || 1})}
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                完成進度: {editingTask.progress}%
+                                            </label>
+                                            <input 
+                                                type="range" 
+                                                min="0" 
+                                                max="100" 
+                                                step="5"
+                                                value={editingTask.progress}
+                                                onChange={(e) => setEditingTask({...editingTask, progress: parseInt(e.target.value)})}
+                                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                            />
+                                        </div>
+
+                                        <div className="pt-4 flex justify-between items-center border-t border-gray-100 mt-4">
+                                            {tasks.find(t => t.id === editingTask.id) ? (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleDelete}
+                                                    className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-red-50"
+                                                >
+                                                    <Icons.Trash2 size={16} /> 刪除任務
+                                                </button>
+                                            ) : (
+                                                <div></div>
+                                            )}
+                                            
+                                            <div className="flex gap-3">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setIsModalOpen(false)}
+                                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                                                >
+                                                    取消
+                                                </button>
+                                                <button 
+                                                    type="submit" 
+                                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-md transition-all active:scale-95 flex items-center gap-2 font-medium"
+                                                >
+                                                    <Icons.Save size={18} /> 儲存變更
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
